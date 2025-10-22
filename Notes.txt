@@ -1,0 +1,37 @@
+Endpoint Syntax /api/users/:userId/modules
+
+
+const modulesController = async (req, res) => {
+  // Build SQL
+  const table = "Modules";
+  const extendedTable = `${table} LEFT JOIN users ON Modules.ModuleLeaderID = users.UserID`;
+  const fields = [
+    "ModuleID",
+    "ModuleName",
+    "ModuleCode",
+    "ModuleLevel",
+    "ModuleYearID",
+    "ModuleLeaderID",
+    "ModuleImageURL",
+  ];
+  const extendedFields = `${fields}, CONCAT(UserFirstName, ' ', UserLastName) AS ModuleLeaderName`;
+  const sql = `SELECT ${extendedFields} FROM ${extendedTable}`;
+  // Execute query
+  let isSuccess = false;
+  let message = "";
+  let result = null;
+  try {
+    [result] = await database.query(sql);
+    if (result.length === 0) message = "No records found.";
+    else {
+      isSuccess = true;
+      message = "Records retrieved successfully.";
+    }
+  } catch (error) {
+    message = `Failed to execute query: ${error.message}`;
+  }
+  // Return response -----------------------------------------
+  isSuccess
+    ? res.status(200).json(result)
+    : res.status(400).json({ message: message });
+};
