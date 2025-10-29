@@ -1,15 +1,39 @@
 // Imports -------------------------------------------------
 import express from "express";
+import cors from "cors";
 import database from "./database.js";
 
-// Configue express app ------------------------------------
-const app = new express();
+// Configure express app -----------------------------------
+const app = express();
 
-// Configure middleware ------------------------------------
+// Middleware ----------------------------------------------
+app.use(express.json());
+
+const ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:3000";
+
+app.use(
+  cors({
+    origin: ORIGIN,
+    credentials: true,
+  })
+);
+
+app.options(/.*/, cors({ origin: ORIGIN, credentials: true }));
+
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", ORIGIN);
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+  );
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
 
 // Controllers ---------------------------------------------
 
-// --- Conformance: DB row to JS object --------------------
 const fromDbTrialRow = (r) => ({
   trialId: Number(r.trial_id),
   trialName: r.trial_name,
@@ -31,8 +55,7 @@ const getCrcTrialsController = async (req, res) => {
       clinicaltrials AS ct
     INNER JOIN 
       crctrials AS crc 
-    ON 
-      crc.trial_id = ct.trial_id
+      ON crc.trial_id = ct.trial_id
     WHERE 
       crc.user_id = ?
     ORDER BY 
@@ -62,8 +85,7 @@ const getCrcTrialsController = async (req, res) => {
   }
 };
 
-// Endpoints ---------------------------------------------
-
+// Endpoints -----------------------------------------------
 app.get("/api/trials/users/:crc_id", getCrcTrialsController);
 
 // Start server --------------------------------------------
