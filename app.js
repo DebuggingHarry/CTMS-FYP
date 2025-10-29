@@ -17,69 +17,54 @@ const fromDbTrialRow = (r) => ({
 const fromDbTrials = (rows) => rows.map(fromDbTrialRow);
 
 const getCrcTrialsController = async (req, res) => {
-  const crcId = Number(req.params.crcId);
-  const trialId =
-    req.params.trialId !== undefined ? Number(req.params.trialId) : null;
+  const crcId = Number(req.params.crc_id);
 
   if (!Number.isFinite(crcId) || crcId <= 0) {
     return res.status(400).json({ success: false, message: "Invalid CRC id." });
   }
-  if (trialId !== null && (!Number.isFinite(trialId) || trialId <= 0)) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Invalid trialId." });
-  }
 
-  // Build SQL ----------------------------------------------
-  const table = "clinicaltrials";
-  const trialIdField = "clinicaltrials.trial_id";
-
-  const extendedTable = `${table}
-    LEFT JOIN crctrials 
-      ON crctrials.trial_id = clinicaltrials.trial_id
-     AND crctrials.user_id = ?`;
-
-  const fields = ["clinicaltrials.trial_id", "clinicaltrials.trial_name"];
-  const extendedFields = fields.join(", ");
-
-  let sql = `
-    SELECT ${extendedFields}
-    FROM ${extendedTable}
-    WHERE crctrials.user_id IS NOT NULL
+  const sql = `
+    SELECT 
+      ct.trial_id, 
+      ct.trial_name
+    FROM 
+      clinicaltrials AS ct
+    INNER JOIN 
+      crctrials AS crc 
+    ON 
+      crc.trial_id = ct.trial_id
+    WHERE 
+      crc.user_id = ?
+    ORDER BY 
+      ct.trial_name ASC;
   `;
 
-  const params = [crcId];
-  if (trialId !== null) {
-    sql += ` AND ${trialIdField} = ?`;
-    params.push(trialId);
-  }
-
-  sql += ` ORDER BY clinicaltrials.trial_name ASC`;
-
-  // Execute query --------------------------------------------
-  let message = "";
   try {
-    const [result] = await database.query(sql, params);
-
+    const [result] = await database.query(sql, [crcId]);
     const data = fromDbTrials(result);
 
     if (data.length === 0) {
-      message = "No records found.";
-      return res.status(200).json({ success: false, message, data: [] });
+      return res
+        .status(200)
+        .json({ success: false, message: "No records found.", data: [] });
     }
 
-    message = "Records retrieved successfully.";
-    return res.status(200).json({ success: true, message, data });
+    return res.status(200).json({
+      success: true,
+      message: "Records retrieved successfully.",
+      data,
+    });
   } catch (error) {
-    message = `Failed to execute query: ${error.message}`;
-    return res.status(500).json({ success: false, message });
+    return res.status(500).json({
+      success: false,
+      message: `Failed to execute query: ${error.message}`,
+    });
   }
 };
 
 // Endpoints ---------------------------------------------
 
-app.get("/api/user/:crcId/trials", getCrcTrialsController);
-app.get("/api/user/:crcId/trials/:trialId", getCrcTrialsController);
+app.get("/api/trials/users/:crc_id", getCrcTrialsController);
 
 // Start server --------------------------------------------
 const PORT = process.env.PORT || 5000;
