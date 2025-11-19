@@ -40,7 +40,13 @@ const buildSetFields = (fields) =>
   );
 const buildTrialsInsertSQL = (record = {}) => {
   const table = `clinicaltrials`;
-  let mutableFields = ["trial_name"];
+  let mutableFields = [
+    "trial_name",
+    "trial_status",
+    "trial_description",
+    "start_date",
+    "end_date",
+  ];
   const name = record.trial_name;
 
   return `INSERT INTO ${table} ` + buildSetFields(mutableFields);
@@ -56,7 +62,11 @@ const buildTrialsSelectSQL = (id, variant) => {
 
   const fields = `
   ct.trial_id,
-  ct.trial_name
+  ct.trial_name,
+  ct.trial_status,
+  ct.trial_description,
+  ct.start_date,
+  ct.end_date
 `;
   const extendedFields = fields;
 
@@ -69,6 +79,9 @@ const buildTrialsSelectSQL = (id, variant) => {
       ${fields}
     FROM
       ${table}
+    `;
+      if (id) sql += `WHERE ct.trial_id = ${id}`;
+      sql += `
     ORDER BY
       ct.trial_name ASC;
     `;
