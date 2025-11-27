@@ -11,13 +11,15 @@ app.use(express.json({ type: "*/*" }));
 const ORIGIN = process.env.FRONTEND_ORIGIN || "http://localhost:3000";
 app.use(
   cors({
-    origin: ORIGIN,
+    origin: true,
     credentials: true,
   })
 );
-app.options(/.*/, cors({ origin: ORIGIN, credentials: true }));
+
+app.options(/.*/, cors({ origin: true, credentials: true }));
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", ORIGIN);
+  // Reflect the request origin if present (keeps compatibility with credentials)
+  res.header("Access-Control-Allow-Origin", req.headers.origin || ORIGIN);
   res.header("Access-Control-Allow-Credentials", "true");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.header(
