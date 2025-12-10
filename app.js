@@ -54,12 +54,57 @@ const buildTrialsInsertSQL = (record = {}) => {
   return `INSERT INTO ${table} ` + buildSetFields(mutableFields);
 };
 
+const buildTrialStaffInsertSQL = () => {
+  const table = `trial_staff`;
+  const fields = ["trial_id", "user_id", "role_id", "start_date", "end_date"];
+  return `INSERT INTO ${table} ` + buildSetFields(fields);
+};
+
+const buildTrialStaffRolesSelectSQL = () => {
+  const table = `trial_staff_roles AS tsr`;
+  const fields = `
+  tsr.role_id,
+  tsr.role_name
+`;
+  return `
+    SELECT
+      ${fields}
+    FROM
+      ${table}
+    ORDER BY
+      tsr.role_name ASC;
+  `;
+};
+
+const buildStaffUsersSelectSQL = () => {
+  const table = `users AS u`;
+  const fields = `
+  u.user_id,
+  u.usertype_id,
+  u.userFirstname AS userFirstname,
+  u.userLastname AS userLastname,
+  CONCAT(u.userFirstname, ' ', u.userLastname) AS fullName,
+  u.participant_code,
+  u.email
+`;
+  return `
+    SELECT
+      ${fields}
+    FROM
+      ${table}
+    WHERE
+      u.usertype_id IN (2, 3)
+    ORDER BY
+      u.participant_code ASC;
+  `;
+};
+
 const buildTrialsSelectSQL = (id, variant) => {
   const table = `clinicaltrials AS ct`;
   const extendedTable = `
   clinicaltrials AS ct
-  LEFT JOIN crctrials AS crc
-    ON crc.trial_id = ct.trial_id
+  INNER JOIN trial_staff AS ts
+    ON ts.trial_id = ct.trial_id
 `;
 
   const fields = `
@@ -96,7 +141,7 @@ const buildTrialsSelectSQL = (id, variant) => {
     FROM
       ${extendedTable}
     `;
-      if (id) sql += `WHERE crc.user_id = ${id}`;
+      if (id) sql += `WHERE ts.user_id = ${id}`;
       sql += `
     ORDER BY
       ct.trial_name ASC;
@@ -109,8 +154,9 @@ const buildTrialsSelectSQL = (id, variant) => {
 const createTrials = async (sql, record) => {
   try {
     const status = await database.query(sql, record);
+    const trialId = status[0].insertId;
 
-    const recoverRecord = buildTrialsSelectSQL(status[0].insertId, null);
+    const recoverRecord = buildTrialsSelectSQL(trialId, null);
 
     const { isSuccess, result, message } = await read(recoverRecord);
 
@@ -145,6 +191,25 @@ const read = async (sql) => {
   }
 };
 
+const createTrialStaff = async (sql, record) => {
+  try {
+    const status = await database.query(sql, record);
+    const staffId = status[0].insertId;
+
+    return {
+      isSuccess: true,
+      message: "Trial staff record created successfully.",
+      result: { trial_staff_id: staffId, ...record },
+    };
+  } catch (error) {
+    return {
+      isSuccess: false,
+      message: `Failed to execute query: ${error.message}`,
+      result: null,
+    };
+  }
+};
+
 const getTrialsController = async (res, id, variant) => {
   const sql = buildTrialsSelectSQL(id, variant);
 
@@ -165,6 +230,36 @@ const postTrialsController = async (req, res) => {
   res.status(201).json(result);
 };
 
+const getTrialStaffRolesController = async (req, res) => {
+  const sql = buildTrialStaffRolesSelectSQL();
+
+  const { isSuccess, message, result } = await read(sql);
+  if (!isSuccess) {
+    return res.status(404).json({ message });
+  }
+  res.status(200).json(result);
+};
+
+const getStaffUsersController = async (req, res) => {
+  const sql = buildStaffUsersSelectSQL();
+
+  const { isSuccess, message, result } = await read(sql);
+  if (!isSuccess) {
+    return res.status(404).json({ message });
+  }
+  res.status(200).json(result);
+};
+
+const postTrialStaffController = async (req, res) => {
+  const sql = buildTrialStaffInsertSQL();
+
+  const { isSuccess, message, result } = await createTrialStaff(sql, req.body);
+  if (!isSuccess) {
+    return res.status(500).json({ message });
+  }
+  res.status(201).json(result);
+};
+
 // Endpoints -----------------------------------------------
 app.get("/api/trials/crc/:crc_id", (req, res) =>
   getTrialsController(res, req.params.crc_id, "clinical")
@@ -172,6 +267,12 @@ app.get("/api/trials/crc/:crc_id", (req, res) =>
 app.get("/api/trials", (req, res) => getTrialsController(res, null, null));
 
 app.post("/api/trials", postTrialsController);
+
+app.get("/api/trial-staff-roles", getTrialStaffRolesController);
+
+app.get("/api/staff-users", getStaffUsersController);
+
+app.post("/api/trial-staff", postTrialStaffController);
 
 // Start server --------------------------------------------
 const PORT = process.env.PORT || 5000;
