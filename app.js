@@ -40,7 +40,7 @@ const buildSetFields = (fields) =>
       setSQL + `${field}=:${field}` + (index === fields.length - 1 ? "" : ", "),
     `SET `
   );
-const buildTrialsInsertSQL = (record = {}) => {
+const buildTrialsInsertSQL = () => {
   const table = `clinicaltrials`;
   let mutableFields = [
     "trial_name",
@@ -49,9 +49,30 @@ const buildTrialsInsertSQL = (record = {}) => {
     "start_date",
     "end_date",
   ];
-  const name = record.trial_name;
 
   return `INSERT INTO ${table} ` + buildSetFields(mutableFields);
+};
+
+const buildTrialsUpdateSQL = () => {
+  const table = `clinicaltrials`;
+  const mutableFields = [
+    "trial_name",
+    "trial_status",
+    "trial_description",
+    "start_date",
+    "end_date",
+  ];
+
+  return (
+    `UPDATE ${table} ` +
+    buildSetFields(mutableFields) +
+    ` WHERE trial_id = :trial_id`
+  );
+};
+
+const buildTrialsDeleteSQL = () => {
+  const table = `clinicaltrials`;
+  return `DELETE FROM ${table} WHERE trial_id = :trial_id`;
 };
 
 const buildTrialStaffInsertSQL = () => {
@@ -151,6 +172,63 @@ const buildTrialsSelectSQL = (id, variant) => {
   return sql;
 };
 
+const updateTrials = async (sql, id, record) => {
+  try {
+    const status = await database.query(sql, { ...record, trial_id: id });
+
+    if (status[0].affectedRows === 0)
+      return {
+        isSuccess: false,
+        message: `Failed to update trial record: ${error.message}`,
+        result: null,
+      };
+
+    const recoverRecord = buildTrialsSelectSQL(id, null);
+
+    const { isSuccess, result, message } = await read(recoverRecord);
+
+    return isSuccess
+      ? { isSuccess: true, message: "Record retrieved successfully.", result }
+      : {
+          isSuccess: false,
+          message: `Failed to recover the updated record: ${message}`,
+          result: null,
+        };
+  } catch (error) {
+    return {
+      isSuccess: false,
+      message: `Failed to execute query: ${error.message}`,
+      result: null,
+    };
+  }
+};
+
+const deleteTrials = async (sql, id) => {
+  try {
+    const status = await database.query(sql, { trial_id: id });
+
+    status[0].affectedRows === 0;
+
+    return status[0].affectedRows === 0
+      ? {
+          isSuccess: false,
+          message: `Failed to delete trial record: ${id}`,
+          result: null,
+        }
+      : {
+          isSuccess: true,
+          message: "Record successfully deleted.",
+          result: null,
+        };
+  } catch (error) {
+    return {
+      isSuccess: false,
+      message: `Failed to execute query: ${error.message}`,
+      result: null,
+    };
+  }
+};
+
 const createTrials = async (sql, record) => {
   try {
     const status = await database.query(sql, record);
@@ -221,13 +299,38 @@ const getTrialsController = async (res, id, variant) => {
 };
 
 const postTrialsController = async (req, res) => {
-  const sql = buildTrialsInsertSQL(req.body);
+  const sql = buildTrialsInsertSQL();
 
   const { isSuccess, message, result } = await createTrials(sql, req.body);
   if (!isSuccess) {
     return res.status(500).json({ message });
   }
   res.status(201).json(result);
+};
+
+const putTrialsController = async (req, res) => {
+  const id = req.params.id;
+  const record = req.body;
+
+  const sql = buildTrialsUpdateSQL();
+
+  const { isSuccess, message, result } = await updateTrials(sql, id, record);
+  if (!isSuccess) {
+    return res.status(500).json({ message });
+  }
+  res.status(200).json(result);
+};
+
+const deleteTrialsController = async (req, res) => {
+  const id = req.params.id;
+
+  const sql = buildTrialsDeleteSQL();
+
+  const { isSuccess, message, result } = await deleteTrials(sql, id);
+  if (!isSuccess) {
+    return res.status(400).json({ message });
+  }
+  res.status(204).json(message);
 };
 
 const getTrialStaffRolesController = async (req, res) => {
@@ -266,7 +369,15 @@ app.get("/api/trials/crc/:crc_id", (req, res) =>
 );
 app.get("/api/trials", (req, res) => getTrialsController(res, null, null));
 
+app.get("/api/trials/:trial_id", (req, res) =>
+  getTrialsController(res, req.params.trial_id, null)
+);
+
 app.post("/api/trials", postTrialsController);
+
+app.put("/api/trials/:id", putTrialsController);
+
+app.delete("/api/trials/:id", deleteTrialsController);
 
 app.get("/api/trial-staff-roles", getTrialStaffRolesController);
 
