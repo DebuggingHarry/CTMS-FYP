@@ -71,6 +71,11 @@ const buildTrialsUpdateSQL = () => {
   );
 };
 
+const buildTrialsSoftDeleteSQL = () => {
+  const table = `clinicaltrials`;
+  return `UPDATE ${table} SET is_deleted = :is_deleted WHERE trial_id = :trial_id`;
+};
+
 const buildTrialsDeleteSQL = () => {
   const table = `clinicaltrials`;
   return `DELETE FROM ${table} WHERE trial_id = :trial_id`;
@@ -149,7 +154,11 @@ const buildTrialsSelectSQL = (id, variant) => {
     FROM
       ${table}
     `;
-      if (id) sql += `WHERE ct.trial_id = ${id}`;
+      {
+        const conditions = ["ct.is_deleted = 0"];
+        if (id) conditions.push(`ct.trial_id = ${id}`);
+        sql += `WHERE ${conditions.join(" AND ")}`;
+      }
       sql += `
     ORDER BY
       ct.trial_name ASC;
@@ -163,7 +172,11 @@ const buildTrialsSelectSQL = (id, variant) => {
     FROM
       ${extendedTable}
     `;
-      if (id) sql += `WHERE ts.user_id = ${id}`;
+      {
+        const conditions = ["ct.is_deleted = 0"];
+        if (id) conditions.push(`ts.user_id = ${id}`);
+        sql += `WHERE ${conditions.join(" AND ")}`;
+      }
       sql += `
     ORDER BY
       ct.trial_name ASC;
@@ -219,6 +232,33 @@ const deleteTrials = async (sql, id) => {
       : {
           isSuccess: true,
           message: "Record successfully deleted.",
+          result: null,
+        };
+  } catch (error) {
+    return {
+      isSuccess: false,
+      message: `Failed to execute query: ${error.message}`,
+      result: null,
+    };
+  }
+};
+
+const softDeleteTrial = async (sql, id, isDeleted) => {
+  try {
+    const status = await database.query(sql, {
+      trial_id: id,
+      is_deleted: isDeleted,
+    });
+
+    return status[0].affectedRows === 0
+      ? {
+          isSuccess: false,
+          message: `Failed to update deletion flag for trial: ${id}`,
+          result: null,
+        }
+      : {
+          isSuccess: true,
+          message: "Record deletion flag updated.",
           result: null,
         };
   } catch (error) {
@@ -334,6 +374,23 @@ const deleteTrialsController = async (req, res) => {
   res.status(200).json(message);
 };
 
+const patchTrialsSoftDeleteController = async (req, res) => {
+  const id = req.params.id;
+  const { is_deleted } = req.body;
+
+  if (typeof is_deleted === "undefined") {
+    return res.status(400).json({ message: "Missing is_deleted flag." });
+  }
+
+  const sql = buildTrialsSoftDeleteSQL();
+
+  const { isSuccess, message } = await softDeleteTrial(sql, id, is_deleted);
+  if (!isSuccess) {
+    return res.status(400).json({ message });
+  }
+  res.status(200).json({ message });
+};
+
 const getTrialStaffRolesController = async (req, res) => {
   const sql = buildTrialStaffRolesSelectSQL();
 
@@ -377,6 +434,7 @@ app.get("/api/trials/:trial_id", (req, res) =>
 app.post("/api/trials", postTrialsController);
 
 app.put("/api/trials/:id", putTrialsController);
+app.patch("/api/trials/:id/is-deleted", patchTrialsSoftDeleteController);
 
 app.delete("/api/trials/:id", deleteTrialsController);
 
