@@ -5,6 +5,7 @@ import database from "./database.js";
 
 // Configure express app -----------------------------------
 const app = express();
+app.set("trust proxy", 1);
 
 // Middleware ----------------------------------------------
 app.use(express.json({ type: "*/*" }));
@@ -330,7 +331,7 @@ const deleteTrialsController = async (req, res) => {
   if (!isSuccess) {
     return res.status(400).json({ message });
   }
-  res.status(204).json(message);
+  res.status(200).json(message);
 };
 
 const getTrialStaffRolesController = async (req, res) => {
@@ -387,4 +388,6 @@ app.post("/api/trial-staff", postTrialStaffController);
 
 // Start server --------------------------------------------
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, "0.0.0.0", () =>
+  console.log(`Server running on port ${PORT}`)
+);

@@ -1,15 +1,22 @@
 // Imports -------------------------------------------------
 import mysql from "mysql2/promise";
-import { data } from "react-router-dom";
 
 // Database connection -------------------------------------
+const RAILWAY_URL =
+  process.env.MYSQL_PUBLIC_URL ||
+  process.env.MYSQL_URL ||
+  "mysql://root:OijxHMSbTZBKPRWAxwcjnHvUnPqgSbcM@shortline.proxy.rlwy.net:24377/railway";
+
+const url = new URL(RAILWAY_URL);
+
 const dbConfig = {
-  database: process.env.DB_NAME || "ctms",
-  port: process.env.DB_PORT || 3306,
-  host: process.env.DB_HOST || "localhost",
-  user: process.env.DB_USER || "root",
-  password: process.env.DB_PSWD || "",
+  database: url.pathname.replace("/", ""),
+  port: Number(url.port),
+  host: url.hostname,
+  user: decodeURIComponent(url.username),
+  password: decodeURIComponent(url.password),
   namedPlaceholders: true,
+  ssl: { rejectUnauthorized: false },
 };
 
 let database;
